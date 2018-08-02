@@ -1,7 +1,8 @@
 # hokanjs
 Super small and simple string interpolator
-It searches the DOM and replaces placeholders.
-A placeholder is a word encased with `{{}}`, e.g `{{text}}`
+It searches the DOM and replaces placeholders. Works in any text as well as in attributes
+A placeholder is a word encased with `{{}}`, e.g:
+`<div>{{text}}</div>``
 
 Initialize hokan with
 ```
