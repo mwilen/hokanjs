@@ -1,7 +1,7 @@
 # hokanjs
 Super small (1kB gzipped) and simple string interpolator  
 It searches the DOM and replaces placeholders.  
-Works in any text as well as in attributes
+Works in any text as well as in attributes.  
 A placeholder is a word encased with `{{}}`, e.g:  
 ```
 <div>{{text}}</div>
