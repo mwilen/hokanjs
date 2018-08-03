@@ -12,7 +12,7 @@ Initialize hokan with
 ```
 let hokan = new Hokan();
 ```
-You can initialize it with properties as well
+Or initialize it with properties
 
 ```
 let hokan = new Hokan({
@@ -20,10 +20,15 @@ let hokan = new Hokan({
 });
 ```
 
-When hokan is initialized you can simply set and get the properties using `hokan.key`.
+Once hokan is initialized you can simply set and get the properties using `hokan.key`.
 ```
 hokan.text = 'This is awesome!'
 console.log(hokan.text) // This is awesome!
+
+// Or set multiple key values at the same time using set
+hokan.set({
+  text: 'The new text'
+})
 ```
 
 Hokan provides a change callback `onChange(fn)` which returns the new values of the interpolated placeholders
