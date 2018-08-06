@@ -1,6 +1,5 @@
 # hokanjs
-Super small (1kB gzipped) and Simple string interpolation library
-It searches the DOM and replaces placeholders.  
+Super small (1kB gzipped) and Simple string interpolation library that searches the DOM and replaces placeholders.  
 Works in any text as well as in attributes.  
 A placeholder is a word encased with `{{}}`, e.g:  
 ```
