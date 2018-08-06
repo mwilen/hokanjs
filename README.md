@@ -1,6 +1,6 @@
 # hokanjs
 Hokanjs is a super small (1kB gzipped) and simple string interpolation library that searches the DOM and replaces placeholders.  
-Works in any text as well as in attributes.  
+Works in any text (found in the DOM) as well as in attributes.  
 A placeholder is a word encased with `{{}}`, e.g:  
 ```
 <div>{{text}}</div>
@@ -36,3 +36,9 @@ hokan.onChange((obj) => {
   console.log(obj)
 })
 ```
+
+---
+## Todo
+[] Migrate to Typescript
+[] Release on NPM
+[] CI / Testing
