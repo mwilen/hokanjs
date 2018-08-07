@@ -39,5 +39,5 @@ hokan.onChange((obj) => {
 
 ---
 ## Todo
-[ ] Release on NPM  
-[ ] Tests
+- [ ] Release on NPM  
+- [ ] Tests
