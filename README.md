@@ -39,6 +39,5 @@ hokan.onChange((obj) => {
 
 ---
 ## Todo
-[] Migrate to Typescript
 [] Release on NPM
-[] CI / Testing
+[] Tests
