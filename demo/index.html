@@ -1,0 +1,14 @@
+<html>
+<head>
+    <title>Hokanjs</title>
+    <script src="hokan.js"></script>
+    <script>
+        let hk = new Hokan();
+        hk.text = 'Hello world!'
+    </script>
+</head>
+    <body>
+        <h1>{{text}}</h1>
+        <input type="text" hk-model="text">
+    </body>
+</html>
