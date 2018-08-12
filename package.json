@@ -1,0 +1,20 @@
+{
+  "name": "hokanjs",
+  "version": "1.0.0",
+  "description": "A small string interpolation and templating library",
+  "scripts": {
+    "build": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mwilen/hokanjs.git"
+  },
+  "author": "Mathias Wilén",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mwilen/hokanjs/issues"
+  },
+  "homepage": "https://github.com/mwilen/hokanjs#readme",
+  "dependencies": {},
+  "devDependencies": {}
+}

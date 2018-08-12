@@ -1,12 +1,17 @@
 const Hokan = function(keys){
 
     const stringRegExp = /{{(.*?)}}/g;
-    let placeholders = [];
     let DOMElements = [];
     let props = keys || {};
+    let placeholders = {};
     let prevProps = {};
     let listeners = [];
-    let models = [];
+    let iterables = [];
+
+    function Property(){
+        this.elements = [];
+        this.wasChanged = true;
+    }
 
     props.onChange = function(cb){
         var returnProps = {...props};
@@ -22,7 +27,7 @@ const Hokan = function(keys){
         props = {...props, ...obj};
     }
 
-    function searchDOM() {
+    function parseDOM() {
         if(!document.body)
             return;
         document.body.childNodes.forEach((elem) => {
@@ -32,21 +37,9 @@ const Hokan = function(keys){
                     for(let i = 0; i < elem.attributes.length; i++){
                         let attr = elem.attributes[i];
                         if(findPlaceholders(attr.value)){
-                            findPlaceholders(attr.value).forEach((match) => {
-                                hasPlaceholderAttr = true;
-                                DOMElements.push({
-                                    original: elem.cloneNode(true),
-                                    clone: elem,
-                                    hasPlaceholderAttribute: hasPlaceholderAttr
-                                })
-                                placeholders.push(match);
-                            })
+                            findPlaceholders(attr.value).forEach((match) => addPlaceholderElement(elem, match, true))
                         }
                         if(attr.name === 'hk-model'){
-                            models.push({
-                                elem: elem,
-                                model: attr.value
-                            })
                             elem.addEventListener('keyup', function(){
                                 props[attr.value] = this.value;
                             })
@@ -57,53 +50,145 @@ const Hokan = function(keys){
                                 elem.value = props[attr.value];
                             }
                         }
+                        if(attr.name === 'hk-for'){
+                            iterables.push({
+                                variable: attr.value.split(' ')[1],
+                                iterable: attr.value.split(' ')[3],
+                                original: elem.cloneNode(true),
+                                clone: elem,
+                                elems: [elem]
+                            })
+                        }
                     }
                 }
                 const elemVal = elem.textContent || elem.innerText;
-                if(!hasPlaceholderAttr && findPlaceholders(elemVal).length){
-                    DOMElements.push({original: elem.cloneNode(true), clone: elem, hasPlaceholderAttribute: hasPlaceholderAttr})
-                    findPlaceholders(elemVal).forEach((match) => {
-                        elem.innerText && elem.setAttribute('hk-model', match.replace(/[${}]/g, ''));
-                        placeholders.push(match);
-                    })
+                if(findPlaceholders(elemVal).length && !isIterable(elem)){
+                    findPlaceholders(elemVal).forEach((match) => addPlaceholderElement(elem, match))
                 }
             }
         })
-        console.log(models)
     }
+
     
+    function addPlaceholderElement(element, property, isAttribute){
+        let prop = property.replace(/[${}]/g, '');
+        isAttribute = isAttribute || false;
+        if(!placeholders[prop]){
+            placeholders[prop] = new Property();
+        }
+        placeholders[prop].elements.push({
+            original: element.cloneNode(true),
+            clone: element,
+            hasAttributes: isAttribute
+        });
+        console.log(placeholders)
+    }
+
     function findPlaceholders(val){
         return val.match(stringRegExp) || [];
     }
 
+    function isIterable(elem){
+        return !!(elem.getAttribute && elem.getAttribute('hk-for'))
+    }
+
+    function isObject(obj){
+        return Object.getPrototypeOf(obj) === Object.prototype
+    }
+
     function updateDOM(){
-        DOMElements.forEach((element) => {
-            if(element.clone.nodeType === 3){
-                element.clone.textContent = element.original.textContent;
+        updateElements();
+        updateIterables();
+    }
+
+    function updateElements(){
+        
+        for(let i in placeholders){
+            let property = placeholders[i];
+            if(property.wasChanged){
+                property.elements.forEach((element) => resetElementState(element));
             }
-            else {
-                element.clone.innerText = element.original.innerText;
+        }
+        for(let i in placeholders){
+            let property = placeholders[i];
+            let prop = props[i];
+            if(property.wasChanged){
+                property.elements.forEach((element) => {
+                    if(element.hasAttributes){
+                        for(let j = 0; j < element.clone.attributes.length; j++){
+                            element.clone.attributes[j].value = placeholderToValue(element.clone.attributes[j].value, '{{'+ i + '}}', prop);
+                        }
+                    }
+                    if(element.clone.nodeType === 3){
+                        element.clone.textContent = placeholderToValue(element.clone.textContent, '{{'+ i + '}}', prop);
+                    }
+                    else {
+                        element.clone.innerHTML = placeholderToValue(element.clone.innerText, '{{'+ i + '}}', prop);
+                    }
+                })
+                property.wasChanged = false;
             }
-            if(element.hasPlaceholderAttribute){
-                for(let i = 0; i < element.clone.attributes.length; i++){
-                    element.clone.attributes[i].value = element.original.attributes[i].value
-                }
+        }
+    }
+
+    function resetElementState(element) {
+        if(element.clone.nodeType === 3){
+            element.clone.textContent = element.original.textContent;
+        }
+        else {
+            element.clone.innerText = element.original.innerText;
+        }
+        if(element.hasAttributes){
+            for(let i = 0; i < element.original.attributes.length; i++){
+                element.clone.attributes[i].value = element.original.attributes[i].value
             }
-            placeholders.forEach((p) => {
-                const key = p.replace(/[${}]/g, '');
-                if(element.hasPlaceholderAttribute){
-                    for(let i = 0; i < element.clone.attributes.length; i++){
-                        element.clone.attributes[i].value = element.clone.attributes[i].value.replace(p, props[key]);
+        }
+    }
+
+    function updateIterables(){
+        console.log(iterables)
+        iterables.forEach((iterable) => {
+            let propVals = props[iterable.iterable];
+            iterable.clone.innerText = iterable.original.innerText;
+            for(var i = iterable.elems.length - 1 ; i > 0; i--){
+                iterable.elems[i].parentNode.removeChild(iterable.elems[i]);
+            }
+            iterable.elems = [iterable.elems[0]];
+            const placeholders = findPlaceholders(iterable.clone.innerText);
+            for(var i = 0; i < propVals.length - 1; i++){
+                let elem = document.createElement(iterable.original.tagName);
+                elem.innerHTML = iterable.original.innerHTML;
+                iterable.clone.parentNode.insertBefore(elem, iterable.elems[iterable.elems.length-1].nextSibling)
+                iterable.elems.push(elem)
+            }
+            for(var i = 0; i < propVals.length; i++){
+                for(let p of placeholders){
+                    let key = i;
+                    const ph = p.replace(/[${}]/g, '');
+                    if(isObject(propVals[i])){
+                        if(ph.indexOf('.') != -1){
+                            key = ph.split('.')[1];
+                            iterable.elems[i].innerHTML = placeholderToValue(iterable.elems[i].innerText, p, propVals[i][key]);
+                        }
+                        else {
+                            iterable.elems[i].innerHTML = placeholderToValue(iterable.elems[i].innerText, p, propVals[i]);
+                        }
+                    }
+                    else {
+                        if(ph.indexOf('.') === -1){
+                            iterable.elems[i].innerHTML = placeholderToValue(iterable.elems[i].innerText, p, propVals[key]);
+                        }
+                        else {
+                            iterable.elems[i].innerHTML = placeholderToValue(iterable.elems[i].innerText, p, undefined);
+                        }
                     }
                 }
-                if(element.clone.nodeType === 3){
-                    element.clone.textContent = element.clone.textContent.replace(p, props[key]);
-                }
-                else {
-                    element.clone.innerHTML = element.clone.innerText.replace(p, props[key]);
-                }
-            })
+            }
         })
+    }
+
+    function placeholderToValue(text, placeholder, value){
+        return text.replace(placeholder, value)
     }
 
     (function changeDetector() {
@@ -128,6 +213,7 @@ const Hokan = function(keys){
             for(let i in props){
                 if(props[i] !== prevProps[i]){
                     prevProps[i] = props[i];
+                    placeholders[i] && (placeholders[i].wasChanged = true);
                     propsChanged = true;
                 }
             }
@@ -144,11 +230,11 @@ const Hokan = function(keys){
     })();
 
     if(document.readyState === 'complete'){
-        searchDOM();
+        parseDOM();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        searchDOM() 
+        parseDOM() 
     });
 
     return props;

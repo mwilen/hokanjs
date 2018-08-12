@@ -1,14 +1,37 @@
 <html>
 <head>
     <title>Hokanjs</title>
-    <script src="hokan.js"></script>
+    <script src="../src/index.js"></script>
     <script>
         let hk = new Hokan();
         hk.text = 'Hello world!'
+        hk.arr = ['a', 'b', 'c']
+        hk.link = 'https://google.com'
+        setTimeout(function(){
+            hk.arr = [
+                {
+                    text: 'a',
+                    id: 1
+                },
+                {
+                    text: 'b',
+                    id: 2
+                },
+                {
+                    text: 'c',
+                    id: 3
+                }
+            ]
+        }, 2000)
     </script>
 </head>
     <body>
         <h1>{{text}}</h1>
         <input type="text" hk-model="text">
+        <br>
+        <a href="{{link}}">{{text}}</a>
+        <div hk-for="let i of arr">
+            Row {{i}} {{i.text}} {{i.id}}
+        </div>
     </body>
 </html>
