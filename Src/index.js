@@ -1,7 +1,6 @@
 const Hokan = function(keys){
 
     const stringRegExp = /{{(.*?)}}/g;
-    let DOMElements = [];
     let props = keys || {};
     let placeholders = {};
     let prevProps = {};
@@ -56,7 +55,8 @@ const Hokan = function(keys){
                                 iterable: attr.value.split(' ')[3],
                                 original: elem.cloneNode(true),
                                 clone: elem,
-                                elems: [elem]
+                                elems: [elem],
+                                wasChanged: true
                             })
                         }
                     }
@@ -81,7 +81,6 @@ const Hokan = function(keys){
             clone: element,
             hasAttributes: isAttribute
         });
-        console.log(placeholders)
     }
 
     function findPlaceholders(val){
@@ -146,8 +145,13 @@ const Hokan = function(keys){
     }
 
     function updateIterables(){
-        console.log(iterables)
         iterables.forEach((iterable) => {
+            if(!iterable.wasChanged){
+                return;
+            }
+            if(!iterable.variable || !iterable.iterable){
+                throw new Error('Invalid iterator expression. Expected e.g "let i of array"')
+            }
             let propVals = props[iterable.iterable];
             iterable.clone.innerText = iterable.original.innerText;
             for(var i = iterable.elems.length - 1 ; i > 0; i--){
@@ -158,6 +162,7 @@ const Hokan = function(keys){
             for(var i = 0; i < propVals.length - 1; i++){
                 let elem = document.createElement(iterable.original.tagName);
                 elem.innerHTML = iterable.original.innerHTML;
+                elem.setAttribute('hk-for', '')
                 iterable.clone.parentNode.insertBefore(elem, iterable.elems[iterable.elems.length-1].nextSibling)
                 iterable.elems.push(elem)
             }
@@ -184,6 +189,7 @@ const Hokan = function(keys){
                     }
                 }
             }
+            iterable.wasChanged = false;
         })
     }
 
@@ -214,6 +220,11 @@ const Hokan = function(keys){
                 if(props[i] !== prevProps[i]){
                     prevProps[i] = props[i];
                     placeholders[i] && (placeholders[i].wasChanged = true);
+                    for(let j in iterables){
+                        if(iterables[j].iterable === i){
+                            iterables[j].wasChanged = true;
+                        }
+                    }
                     propsChanged = true;
                 }
             }
