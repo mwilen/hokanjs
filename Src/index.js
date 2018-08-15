@@ -1,37 +1,35 @@
 const Hokan = function(keys){
 
+    const self = this;
+
     const stringRegExp = /{{(.*?)}}/g;
-    let props = keys || {};
     let placeholders = {};
-    let prevProps = {};
+    let prevKeys = {};
+    let tempPrevKeys = {};
     let listeners = [];
     let iterables = [];
-
-    function Property(){
-        this.elements = [];
-        this.wasChanged = true;
-    }
-
-    props.onChange = function(cb){
-        var returnProps = {...props};
-        delete returnProps.onChange;
-        delete returnProps.set;
+    
+    this.keys = keys || {};
+    
+    this.onChange = function(cb){
+        var returnProps = {...this.keys};
         for(var i in listeners){
-            listeners[i](returnProps);
+            listeners[i](tempPrevKeys, returnProps);
         }
         typeof cb === 'function' && listeners.push(cb);
     }
-
-    props.set = function(obj){
-        props = {...props, ...obj};
+    
+    this.set = function(obj){
+        this.keys = {...this.keys, ...obj};
     }
+
+    Object.freeze(this);
 
     function parseDOM() {
         if(!document.body)
             return;
         document.body.childNodes.forEach((elem) => {
             if(elem.nodeType === 3 || (elem.tagName && !elem.tagName.match(/(html|body|script|style|meta|head|link)/gi))){
-                let hasPlaceholderAttr = false;
                 if(elem.attributes){
                     for(let i = 0; i < elem.attributes.length; i++){
                         let attr = elem.attributes[i];
@@ -40,14 +38,17 @@ const Hokan = function(keys){
                         }
                         if(attr.name === 'hk-model'){
                             elem.addEventListener('keyup', function(){
-                                props[attr.value] = this.value;
+                                self.keys[attr.value] = this.value;
                             })
                             elem.addEventListener('keydown', function(){
-                                props[attr.value] = this.value;
+                                self.keys[attr.value] = this.value;
                             })
-                            if(props[attr.value]){
-                                elem.value = props[attr.value];
+                            if(self.keys[attr.value]){
+                                elem.value = self.keys[attr.value];
                             }
+                            listeners.push(function(o, n){
+                                elem.value = self.keys[attr.value];
+                            })
                         }
                         if(attr.name === 'hk-for'){
                             iterables.push({
@@ -68,7 +69,6 @@ const Hokan = function(keys){
             }
         })
     }
-
     
     function addPlaceholderElement(element, property, isAttribute){
         let prop = property.replace(/[${}]/g, '');
@@ -83,63 +83,46 @@ const Hokan = function(keys){
         });
     }
 
-    function findPlaceholders(val){
-        return val.match(stringRegExp) || [];
-    }
-
-    function isIterable(elem){
-        return !!(elem.getAttribute && elem.getAttribute('hk-for'))
-    }
-
-    function isObject(obj){
-        return Object.getPrototypeOf(obj) === Object.prototype
-    }
-
-    function updateDOM(){
-        updateElements();
-        updateIterables();
-    }
-
     function updateElements(){
         
         for(let i in placeholders){
-            let property = placeholders[i];
-            if(property.wasChanged){
-                property.elements.forEach((element) => resetElementState(element));
+            let placeholder = placeholders[i];
+            if(placeholder.wasChanged){
+                placeholder.elements.forEach((element) => resetElementState(element));
             }
         }
+
         for(let i in placeholders){
-            let property = placeholders[i];
-            let prop = props[i];
-            if(property.wasChanged){
-                property.elements.forEach((element) => {
-                    if(element.hasAttributes){
-                        for(let j = 0; j < element.clone.attributes.length; j++){
-                            element.clone.attributes[j].value = placeholderToValue(element.clone.attributes[j].value, '{{'+ i + '}}', prop);
-                        }
-                    }
+            let placeholder = placeholders[i];
+            let prop = self.keys[i];
+            if(placeholder.wasChanged){
+                placeholder.elements.forEach((element) => {
                     if(element.clone.nodeType === 3){
-                        element.clone.textContent = placeholderToValue(element.clone.textContent, '{{'+ i + '}}', prop);
+                        element.clone.textContent = placeholderToValue(
+                            element.clone.textContent, 
+                            '{{'+ i + '}}', 
+                            prop
+                        );
                     }
                     else {
-                        element.clone.innerHTML = placeholderToValue(element.clone.innerText, '{{'+ i + '}}', prop);
+                        element.clone.innerHTML = placeholderToValue(
+                            element.clone.innerText, 
+                            '{{'+ i + '}}', 
+                            prop
+                        );
+                    }
+                    if(element.hasAttributes){
+                        for(let j = 0; j < element.clone.attributes.length; j++){
+                            element.clone.attributes[j].value = placeholderToValue(
+                                element.clone.attributes[j].value, 
+                                '{{'+ i + '}}', 
+                                prop
+                            );
+                        }
                     }
                 })
-                property.wasChanged = false;
-            }
-        }
-    }
-
-    function resetElementState(element) {
-        if(element.clone.nodeType === 3){
-            element.clone.textContent = element.original.textContent;
-        }
-        else {
-            element.clone.innerText = element.original.innerText;
-        }
-        if(element.hasAttributes){
-            for(let i = 0; i < element.original.attributes.length; i++){
-                element.clone.attributes[i].value = element.original.attributes[i].value
+                // Reset state
+                placeholder.wasChanged = false;
             }
         }
     }
@@ -152,7 +135,7 @@ const Hokan = function(keys){
             if(!iterable.variable || !iterable.iterable){
                 throw new Error('Invalid iterator expression. Expected e.g "let i of array"')
             }
-            let propVals = props[iterable.iterable];
+            let propVals = self.keys[iterable.iterable];
             iterable.clone.innerText = iterable.original.innerText;
             for(var i = iterable.elems.length - 1 ; i > 0; i--){
                 iterable.elems[i].parentNode.removeChild(iterable.elems[i]);
@@ -160,9 +143,7 @@ const Hokan = function(keys){
             iterable.elems = [iterable.elems[0]];
             const placeholders = findPlaceholders(iterable.clone.innerText);
             for(var i = 0; i < propVals.length - 1; i++){
-                let elem = document.createElement(iterable.original.tagName);
-                elem.innerHTML = iterable.original.innerHTML;
-                elem.setAttribute('hk-for', '')
+                let elem = iterable.original.cloneNode(true);
                 iterable.clone.parentNode.insertBefore(elem, iterable.elems[iterable.elems.length-1].nextSibling)
                 iterable.elems.push(elem)
             }
@@ -193,6 +174,39 @@ const Hokan = function(keys){
         })
     }
 
+    function resetElementState(element) {
+        if(!element.hasAttributes){
+            if(element.clone.nodeType === 3){
+                element.clone.textContent = element.original.textContent;
+            }
+            else {
+                element.clone.innerText = element.original.innerText;
+            }
+        }
+        if(element.hasAttributes){
+            for(let i = 0; i < element.original.attributes.length; i++){
+                element.clone.attributes[i].value = element.original.attributes[i].value
+            }
+        }
+    }
+
+    function findPlaceholders(val){
+        return val.match(stringRegExp) || [];
+    }
+
+    function isIterable(elem){
+        return !!(elem.getAttribute && elem.getAttribute('hk-for'))
+    }
+
+    function isObject(obj){
+        return Object.getPrototypeOf(obj) === Object.prototype
+    }
+
+    function updateDOM(){
+        updateElements();
+        updateIterables();
+    }
+
     function placeholderToValue(text, placeholder, value){
         return text.replace(placeholder, value)
     }
@@ -208,17 +222,12 @@ const Hokan = function(keys){
             || function(cb){setTimeout(cb,1000/60)};
         })();
 
-        const caf = (function(){
-            return window.cancelAnimationFrame 
-            || window.mozCancelAnimationFrame 
-            || function(cb){ window.clearTimeout(cb) };
-        })();
-
         (function timer(){
             let propsChanged = false;
-            for(let i in props){
-                if(props[i] !== prevProps[i]){
-                    prevProps[i] = props[i];
+            for(let i in self.keys){
+                tempPrevKeys[i] = prevKeys[i];
+                if(self.keys[i] !== prevKeys[i]){
+                    prevKeys[i] = self.keys[i];
                     placeholders[i] && (placeholders[i].wasChanged = true);
                     for(let j in iterables){
                         if(iterables[j].iterable === i){
@@ -233,7 +242,8 @@ const Hokan = function(keys){
                 // Update the DOM
                 updateDOM();
                 // Notify possible listeners that a change occurred
-                props.onChange();
+                self.onChange();
+                tempPrevKeys = {};
             }
             raf(timer);
         })();
@@ -248,5 +258,8 @@ const Hokan = function(keys){
         parseDOM() 
     });
 
-    return props;
+    function Property(){
+        this.elements = [];
+        this.wasChanged = true;
+    }
 }

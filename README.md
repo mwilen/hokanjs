@@ -19,10 +19,10 @@ let hokan = new Hokan({
 });
 ```
 
-Once hokan is initialized you can simply set and get the properties using `hokan.key`.
+Once hokan is initialized you can simply set and get the properties using `hokan.keys.key`.
 ```
-hokan.text = 'This is awesome!'
-console.log(hokan.text) // This is awesome!
+hokan.keys.text = 'This is awesome!'
+console.log(hokan.keys.text) // This is awesome!
 
 // Or set multiple key values at the same time using set
 hokan.set({
@@ -30,10 +30,10 @@ hokan.set({
 })
 ```
 
-Hokan provides a change callback `onChange(fn)` which returns the new values of the interpolated placeholders
+Hokan provides a change event `onChange(fn)` which returns the old and the new values of the interpolated placeholders
 ```
-hokan.onChange((obj) => {
-  console.log(obj)
+hokan.onChange((oldKeys, newKeys) => {
+  console.log(oldKeys, newKeys)
 })
 ```
 
