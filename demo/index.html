@@ -9,7 +9,7 @@
         hk.keys.link = 'https://google.com'
         hk.keys.linktext = 'https://google.com'
         hk.onChange(function(o, n){
-            console.log(o, n)
+            // console.log(o, n)
         })
         setTimeout(function(){
             hk.keys.link = 'https://reddit.com'
@@ -21,6 +21,7 @@
         <h1>{{text}}</h1>
         <input type="text" hk-model="text">
         <br>
+        {{linktext}}<br>
         <a href="{{link}}" target="_blank">{{linktext}}</a>
         <div hk-for="let i of arr">
             Row {{i}}

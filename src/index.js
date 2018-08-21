@@ -1,8 +1,10 @@
 (function(){
     const Hokan = function(keys){
+
         const self = this;
 
         const stringRegExp = /{{(.*?)}}/g;
+        const ignoredNodes = /(html|body|script|style|meta|head|link)/gi;
         let placeholders = {};
         let prevKeys = {};
         let tempPrevKeys = {};
@@ -10,8 +12,18 @@
         let iterables = [];
         
         this.keys = keys || {};
+
+        const state = {
+            updateQueue: [],
+            changed: false,
+            setState: function(obj){
+                const key = Object.keys(obj)[0];
+                this.updateQueue.push(placeholders[key])
+                console.log(this.updateQueue)
+            }
+        }
         
-        this.onChange = function(cb){
+        this.onChange = function(cb) {
             var returnProps = {...this.keys};
             for(var i in listeners){
                 listeners[i](tempPrevKeys, returnProps);
@@ -19,7 +31,7 @@
             typeof cb === 'function' && listeners.push(cb);
         }
         
-        this.set = function(obj){
+        this.set = function(obj) {
             this.keys = {...this.keys, ...obj};
         }
 
@@ -29,12 +41,12 @@
             if(!document.body)
                 return;
             document.body.childNodes.forEach((elem) => {
-                if(elem.nodeType === 3 || (elem.tagName && !elem.tagName.match(/(html|body|script|style|meta|head|link)/gi))){
+                if(elem.nodeType === 3 || (elem.tagName && !elem.tagName.match(ignoredNodes))){
                     if(elem.attributes){
                         for(let i = 0; i < elem.attributes.length; i++){
                             let attr = elem.attributes[i];
                             if(findPlaceholders(attr.value)){
-                                findPlaceholders(attr.value).forEach((match) => addPlaceholderElement(elem, match, true))
+                                findPlaceholders(attr.value).forEach((match) => addPlaceholderElement(elem, match, Type.Attribute))
                             }
                             if(attr.name === 'hk-model'){
                                 elem.addEventListener('keyup', function(){
@@ -59,75 +71,79 @@
                                     elems: [elem],
                                     wasChanged: true
                                 })
+                                addPlaceholderElement(elem, attr.value.split(' ')[3], Type.Iterable)
                             }
                         }
                     }
                     const elemVal = elem.textContent || elem.innerText;
                     if(findPlaceholders(elemVal).length && !isIterable(elem)){
-                        findPlaceholders(elemVal).forEach((match) => addPlaceholderElement(elem, match))
+                        findPlaceholders(elemVal).forEach((match) => addPlaceholderElement(elem, match, Type.Text))
                     }
                 }
             })
         }
         
-        function addPlaceholderElement(element, property, isAttribute){
+        function addPlaceholderElement(element, property, type){
             let prop = property.replace(/[${}]/g, '');
-            isAttribute = isAttribute || false;
             if(!placeholders[prop]){
-                placeholders[prop] = new Property();
+                placeholders[prop] = new Property(prop);
             }
             placeholders[prop].elements.push({
                 original: element.cloneNode(true),
                 clone: element,
-                hasAttributes: isAttribute
+                type: type,
+                elems: [element]
             });
         }
 
-        function updateElements(){
+        function updateElements(queueElement){
             
-            for(let i in placeholders){
-                let placeholder = placeholders[i];
-                if(placeholder.wasChanged){
-                    placeholder.elements.forEach((element) => resetElementState(element));
-                }
-            }
+            // for(let i in state.updateQueue){
+            //     let placeholder = state.updateQueue[i];
+            //     if(placeholder.wasChanged){
+            //         placeholder.elements.forEach((element) => resetElementState(element));
+            //     }
+            // }
 
-            for(let i in placeholders){
-                let placeholder = placeholders[i];
-                let prop = self.keys[i];
-                if(placeholder.wasChanged){
-                    placeholder.elements.forEach((element) => {
-                        if(element.clone.nodeType === 3){
-                            element.clone.textContent = placeholderToValue(
-                                element.clone.textContent, 
-                                i, 
-                                prop
-                            );
-                        }
-                        else {
-                            element.clone.innerHTML = placeholderToValue(
-                                element.clone.innerText, 
-                                i, 
-                                prop
-                            );
-                        }
-                        if(element.hasAttributes){
-                            for(let j = 0; j < element.clone.attributes.length; j++){
-                                element.clone.attributes[j].value = placeholderToValue(
-                                    element.clone.attributes[j].value, 
-                                    i, 
-                                    prop
-                                );
-                            }
-                        }
-                    })
-                    placeholder.wasChanged = false;
+            console.log(queueElement)
+            let placeholder = queueElement;
+            let prop = self.keys[placeholder.key];
+            placeholder.elements.forEach((element) => {
+                resetElementState(element)
+                if(element.type === Type.Text){
+                    if(element.clone.nodeType === 3){
+                        element.clone.textContent = placeholderToValue(
+                            element.clone.textContent, 
+                            placeholder.key, 
+                            prop
+                        );
+                    }
+                    else {
+                        element.clone.innerHTML = placeholderToValue(
+                            element.clone.innerText, 
+                            placeholder.key, 
+                            prop
+                        );
+                    }
                 }
-            }
+                if(element.type === Type.Attribute){
+                    for(let j = 0; j < element.clone.attributes.length; j++){
+                        element.clone.attributes[j].value = placeholderToValue(
+                            element.clone.attributes[j].value, 
+                            placeholder.key, 
+                            prop
+                        );
+                    }
+                }
+                if(element.type === Type.Iterable){
+                    
+                }
+            })
+            state.updateQueue.shift();
+            
         }
 
         function updateIterables(){
-            console.log(placeholders)
             iterables.forEach((iterable) => {
                 if(!iterable.wasChanged){
                     return;
@@ -181,7 +197,7 @@
         }
 
         function resetElementState(element) {
-            if(!element.hasAttributes){
+            if(element.type === Type.Text){
                 if(element.clone.nodeType === 3){
                     element.clone.textContent = element.original.textContent;
                 }
@@ -189,10 +205,13 @@
                     element.clone.innerText = element.original.innerText;
                 }
             }
-            if(element.hasAttributes){
+            if(element.type === Type.Attribute){
                 for(let i = 0; i < element.original.attributes.length; i++){
                     element.clone.attributes[i].value = element.original.attributes[i].value
                 }
+            }
+            if(element.type === Type.Iterable){
+                // Do stuff
             }
         }
 
@@ -209,7 +228,9 @@
         }
 
         function updateDOM(){
-            updateElements();
+            for(let i in state.updateQueue){
+                updateElements(state.updateQueue[i]);
+            }
             updateIterables();
         }
 
@@ -229,24 +250,24 @@
             })();
 
             (function timer(){
-                let propsChanged = false;
                 for(let i in self.keys){
                     tempPrevKeys[i] = prevKeys[i];
                     if(self.keys[i] !== prevKeys[i]){
                         prevKeys[i] = self.keys[i];
-                        placeholders[i] && (placeholders[i].wasChanged = true);
+                        const obj = {}
+                        obj[i] = self.keys[i]
+                        state.setState(obj);
                         for(let j in iterables){
                             if(iterables[j].iterable === i){
                                 iterables[j].wasChanged = true;
                             }
                         }
-                        propsChanged = true;
+                        // Update the DOM
+                        updateDOM();
                     }
                 }
                 // If a property/value was changed
-                if(propsChanged){
-                    // Update the DOM
-                    updateDOM();
+                if(state.updateQueue.length){
                     // Notify possible listeners that a change occurred
                     self.onChange();
                     tempPrevKeys = {};
@@ -261,13 +282,20 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            parseDOM() 
+            parseDOM();
         });
 
-        function Property(){
+        function Property(key){
             this.elements = [];
             this.wasChanged = true;
+            this.key = key;
         }
+
+        const Type = Object.freeze({
+            Text: 1,
+            Attribute: 2,
+            Iterable: 3
+        })
     }
 
     if(typeof exports === 'object'){
