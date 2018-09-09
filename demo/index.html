@@ -3,17 +3,31 @@
     <title>Hokanjs</title>
     <script src="../src/index.js"></script>
     <script>
-        let hk = new Hokan();
-        hk.keys.text = 'Hello world!'
-        hk.keys.arr = ['a', 'b', 'c']
-        hk.keys.link = 'https://google.com'
-        hk.keys.linktext = 'https://google.com'
-        hk.onChange(function(o, n){
+        let vm = new Hokan();
+        console.log(vm)
+        vm.data.text = 'Hello world!'
+        vm.data.arr1 = ['a', 'b', 'c'];
+        vm.data.arr2 = [
+            {
+                a: {
+                    id: 1
+                }
+            },
+            {
+                a: {
+                    id: 2
+                }
+            }
+        ]
+        vm.data.link = 'https://google.com'
+        vm.data.linktext = 'https://google.com'
+        vm.$onChange(function(o, n){
             // console.log(o, n)
         })
         setTimeout(function(){
-            hk.keys.link = 'https://reddit.com'
-            hk.keys.linktext = 'https://reddit.com'
+            vm.data.link = 'https://reddit.com'
+            vm.data.linktext = 'https://reddit.com'
+            console.log(vm)
         }, 3000)
     </script>
 </head>
@@ -23,8 +37,12 @@
         <br>
         {{linktext}}<br>
         <a href="{{link}}" target="_blank">{{linktext}}</a>
-        <div hk-for="let i of arr">
-            Row {{i}}
+        <div hk-for="let i of arr1">
+            Row {{i}} {{i.id}}
+        </div>
+        <hr>
+        <div hk-for="let arr of arr2">
+            Row {{arr}} {{arr.a}}
         </div>
     </body>
 </html>

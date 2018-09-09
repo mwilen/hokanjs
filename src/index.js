@@ -3,7 +3,8 @@
 
         const self = this;
 
-        const stringRegExp = /{{(.*?)}}/g;
+        const placeholdersRegExp = /{{(.*?)}}/g;
+        const valueRegExp = /[${}]/g;
         const ignoredNodes = /(html|body|script|style|meta|head|link)/gi;
         let placeholders = {};
         let prevKeys = {};
@@ -11,7 +12,7 @@
         let listeners = [];
         let iterables = [];
         
-        this.keys = keys || {};
+        this.data = keys || {};
 
         const state = {
             updateQueue: [],
@@ -19,20 +20,20 @@
             setState: function(obj){
                 const key = Object.keys(obj)[0];
                 this.updateQueue.push(placeholders[key])
-                console.log(this.updateQueue)
+                self[key] = self.data[key]
             }
         }
         
-        this.onChange = function(cb) {
-            var returnProps = {...this.keys};
+        this.$onChange = (cb) => {
+            var returnProps = {...this.data};
             for(var i in listeners){
                 listeners[i](tempPrevKeys, returnProps);
             }
             typeof cb === 'function' && listeners.push(cb);
         }
         
-        this.set = function(obj) {
-            this.keys = {...this.keys, ...obj};
+        this.$set = (obj) => {
+            this.data = {...this.data, ...obj};
         }
 
         Object.freeze(this);
@@ -50,16 +51,16 @@
                             }
                             if(attr.name === 'hk-model'){
                                 elem.addEventListener('keyup', function(){
-                                    self.keys[attr.value] = this.value;
+                                    self.data[attr.value] = this.value;
                                 })
                                 elem.addEventListener('keydown', function(){
-                                    self.keys[attr.value] = this.value;
+                                    self.data[attr.value] = this.value;
                                 })
-                                if(self.keys[attr.value]){
-                                    elem.value = self.keys[attr.value];
+                                if(self.data[attr.value]){
+                                    elem.value = self.data[attr.value];
                                 }
                                 listeners.push(function(o, n){
-                                    elem.value = self.keys[attr.value];
+                                    elem.value = self.data[attr.value];
                                 })
                             }
                             if(attr.name === 'hk-for'){
@@ -68,10 +69,12 @@
                                     iterable: attr.value.split(' ')[3],
                                     original: elem.cloneNode(true),
                                     clone: elem,
-                                    elems: [elem],
-                                    wasChanged: true
+                                    nodes: [elem]
                                 })
                                 addPlaceholderElement(elem, attr.value.split(' ')[3], Type.Iterable)
+                            }
+                            if(attr.name === 'hk-html'){
+                                addPlaceholderElement(elem, attr.value, Type.HTML)
                             }
                         }
                     }
@@ -84,7 +87,7 @@
         }
         
         function addPlaceholderElement(element, property, type){
-            let prop = property.replace(/[${}]/g, '');
+            let prop = property.replace(valueRegExp, '');
             if(!placeholders[prop]){
                 placeholders[prop] = new Property(prop);
             }
@@ -92,37 +95,31 @@
                 original: element.cloneNode(true),
                 clone: element,
                 type: type,
-                elems: [element]
+                nodes: [element]
             });
         }
 
         function updateElements(queueElement){
-            
-            // for(let i in state.updateQueue){
-            //     let placeholder = state.updateQueue[i];
-            //     if(placeholder.wasChanged){
-            //         placeholder.elements.forEach((element) => resetElementState(element));
-            //     }
-            // }
 
-            console.log(queueElement)
-            let placeholder = queueElement;
-            let prop = self.keys[placeholder.key];
-            placeholder.elements.forEach((element) => {
+            if(!queueElement)
+                return;
+
+            let keyValue = self.data[queueElement.key];
+            queueElement.elements.forEach((element) => {
                 resetElementState(element)
                 if(element.type === Type.Text){
                     if(element.clone.nodeType === 3){
                         element.clone.textContent = placeholderToValue(
                             element.clone.textContent, 
-                            placeholder.key, 
-                            prop
+                            queueElement.key, 
+                            keyValue
                         );
                     }
                     else {
-                        element.clone.innerHTML = placeholderToValue(
+                        element.clone.textContent = placeholderToValue(
                             element.clone.innerText, 
-                            placeholder.key, 
-                            prop
+                            queueElement.key, 
+                            keyValue
                         );
                     }
                 }
@@ -130,17 +127,62 @@
                     for(let j = 0; j < element.clone.attributes.length; j++){
                         element.clone.attributes[j].value = placeholderToValue(
                             element.clone.attributes[j].value, 
-                            placeholder.key, 
-                            prop
+                            queueElement.key, 
+                            keyValue
                         );
                     }
                 }
                 if(element.type === Type.Iterable){
-                    
+                    const modelValue = element.original.getAttribute('hk-for');
+                    // try{
+                        const variable = modelValue.split(' ')[1];
+                        const iterable = modelValue.split(' ')[3];
+                        const keys = findPlaceholders(element.clone.innerText);
+
+            // eval('for(let ' + variable + ' of '+JSON.stringify(self.data[queueElement.key])+'){ console.log('+variable+') }')
+                        
+                        for(let i = 0; i < self.data[queueElement.key].length; i++){
+                            let elem = null;
+                            const value = self.data[queueElement.key];
+                            if(i !== 0) {
+                                elem = element.original.cloneNode(true);
+                            }
+                            else {
+                                elem = element.nodes[0]
+                            }
+                            for(var key in keys){
+                                let val = value[i];
+                                if(isObject(val)){
+                                    val = getValueByObjectPath(val, keys[key])
+                                    elem.textContent = placeholderToValue(
+                                        elem.textContent, 
+                                        keys[key],
+                                        val
+                                    );
+                                }
+                                else {
+                                    if(keys[key].indexOf('.') > -1){
+                                        val = getValueByObjectPath(value, keys[key]);
+                                    }
+                                    elem.textContent = placeholderToValue(
+                                        elem.textContent, 
+                                        keys[key],
+                                        val
+                                    );
+                                }
+                            }
+                            if(i !== 0){
+                                element.clone.parentNode.insertBefore(elem, element.nodes[element.nodes.length-1].nextSibling)
+                                element.nodes.push(elem)
+                            }
+                        }
+                    // }
+                    // catch(e){
+                    //     throw new Error('Invalid iterator expression. Expected e.g "let i of array"')
+                    // }
                 }
             })
             state.updateQueue.shift();
-            
         }
 
         function updateIterables(){
@@ -153,25 +195,25 @@
                     throw new Error('Invalid iterator expression. Expected e.g "let i of array"')
                 }
 
-                let keyValues = self.keys[iterable.iterable];
+                let keyValues = self.data[iterable.iterable];
 
                 // Reset the iterable
                 iterable.clone.innerText = iterable.original.innerText;
-                for(var i = iterable.elems.length - 1 ; i > 0; i--){
+                for(let i = iterable.elems.length - 1 ; i > 0; i--){
                     iterable.elems[i].parentNode.removeChild(iterable.elems[i]);
                 }
                 iterable.elems = [iterable.elems[0]];
 
                 const stringPlaceholders = findPlaceholders(iterable.clone.innerText);
-                for(var i = 0; i < keyValues.length - 1; i++){
+                for(let i = 0; i < keyValues.length - 1; i++){
                     let elem = iterable.original.cloneNode(true);
                     iterable.clone.parentNode.insertBefore(elem, iterable.elems[iterable.elems.length-1].nextSibling)
                     iterable.elems.push(elem)
                 }
 
-                for(var i = 0; i < keyValues.length; i++){
+                for(let i = 0; i < keyValues.length; i++){
                     for(let p in stringPlaceholders){
-                        const placeholder = stringPlaceholders[p].replace(/[${}]/g, '')
+                        const placeholder = stringPlaceholders[p].replace(valueRegExp, '')
                         let key = i;
                         if(isObject(keyValues[i])){
                             if(placeholder.indexOf('.') != -1){
@@ -192,7 +234,6 @@
                         }
                     }
                 }
-                iterable.wasChanged = false;
             })
         }
 
@@ -205,18 +246,22 @@
                     element.clone.innerText = element.original.innerText;
                 }
             }
-            if(element.type === Type.Attribute){
+            else if(element.type === Type.Attribute){
                 for(let i = 0; i < element.original.attributes.length; i++){
                     element.clone.attributes[i].value = element.original.attributes[i].value
                 }
             }
-            if(element.type === Type.Iterable){
-                // Do stuff
+            else if(element.type === Type.Iterable){
+                element.clone.textContent = element.original.innerText;
+                for(let i = element.nodes.length - 1 ; i > 0; i--){
+                    element.nodes[i].parentNode.removeChild(element.nodes[i]);
+                }
+                element.nodes = [element.nodes[0]];
             }
         }
 
         function findPlaceholders(val){
-            return val.match(stringRegExp) || [];
+            return val.match(placeholdersRegExp) || [];
         }
 
         function isIterable(elem){
@@ -224,18 +269,49 @@
         }
 
         function isObject(obj){
-            return Object.getPrototypeOf(obj) === Object.prototype
+            return Object.getPrototypeOf(obj) === Object.prototype || false
+        }
+
+        function getValueByObjectPath(object, path){
+            let value = undefined;
+            (function fn(object, path){
+                if(!isObject(object)){
+                    value = undefined;
+                    return;
+                }
+                path = path.replace(valueRegExp, '');
+                const hasChild = !!path.match(/\./);
+                let subPath = path.slice(path.indexOf('.') + 1);
+                if(hasChild && subPath){
+                    if(object.hasOwnProperty(subPath)){
+                        value = object[subPath];
+                    }
+                    else if(subPath.indexOf('.') !== -1){
+                        fn(object[subPath.split('.')[0]], subPath)
+                    }
+                    else {
+                        value = undefined;
+                    }
+                }
+                else {
+                    if(object.hasOwnProperty(path)){
+                        value = object[path];
+                    }
+                    else {
+                        value = object;
+                    }
+                }
+            })(object, path);
+            return value;
         }
 
         function updateDOM(){
-            for(let i in state.updateQueue){
-                updateElements(state.updateQueue[i]);
-            }
+            state.updateQueue.forEach((item) => updateElements(item))
             updateIterables();
         }
 
         function placeholderToValue(text, placeholder, value){
-            return text.replace('{{'+ placeholder + '}}', value)
+            return text.replace('{{'+ placeholder.replace(valueRegExp, '') + '}}', value)
         }
 
         (function changeDetector() {
@@ -250,18 +326,13 @@
             })();
 
             (function timer(){
-                for(let i in self.keys){
+                for(let i in self.data){
                     tempPrevKeys[i] = prevKeys[i];
-                    if(self.keys[i] !== prevKeys[i]){
-                        prevKeys[i] = self.keys[i];
+                    if(self.data[i] !== prevKeys[i]){
+                        prevKeys[i] = self.data[i];
                         const obj = {}
-                        obj[i] = self.keys[i]
+                        obj[i] = self.data[i]
                         state.setState(obj);
-                        for(let j in iterables){
-                            if(iterables[j].iterable === i){
-                                iterables[j].wasChanged = true;
-                            }
-                        }
                         // Update the DOM
                         updateDOM();
                     }
@@ -269,7 +340,7 @@
                 // If a property/value was changed
                 if(state.updateQueue.length){
                     // Notify possible listeners that a change occurred
-                    self.onChange();
+                    self.$onChange();
                     tempPrevKeys = {};
                 }
                 raf(timer);
@@ -287,14 +358,14 @@
 
         function Property(key){
             this.elements = [];
-            this.wasChanged = true;
             this.key = key;
         }
 
         const Type = Object.freeze({
             Text: 1,
             Attribute: 2,
-            Iterable: 3
+            Iterable: 3,
+            HTML: 4
         })
     }
 
