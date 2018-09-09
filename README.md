@@ -1,5 +1,5 @@
 # hokanjs
-Hokanjs is a very small and simple string interpolation library that searches the DOM and replaces placeholders.  
+Hokanjs is a very small and simple string interpolation library that searches the DOM and replaces placeholders - inspired by vue.js.  
 Works in any text (found in the DOM) as well as in attributes.  
 A placeholder is a word encased with `{{}}`, e.g:  
 ```
@@ -9,31 +9,34 @@ A placeholder is a word encased with `{{}}`, e.g:
 
 Initialize hokan with
 ```
-let hokan = new Hokan();
+let vm = new Hokan();
 ```
-Or initialize it with properties
+Or initialize it with properties. Defining `el` is recommended however if it's not defined, `document.body` is used as root element instead.  
 
 ```
-let hokan = new Hokan({
-  text: 'Hello world!'
+let vm = new Hokan({
+  el: '.root',
+  data: {
+    text: 'Hello world!'
+  }
 });
 ```
 
-Once hokan is initialized you can simply set and get the properties using `hokan.keys.key`.
+Once hokan is initialized you can simply set and get the properties using `hokan.data.key`.
 ```
-hokan.keys.text = 'This is awesome!'
-console.log(hokan.keys.text) // This is awesome!
+vm.data.text = 'This is awesome!'
+console.log(vm.data.text) // This is awesome!
 
 // Or set multiple key values at the same time using set
-hokan.set({
+vm.set({
   text: 'The new text'
 })
 ```
 
-Hokan provides a change event `onChange(fn)` which returns the old and the new values of the interpolated placeholders
+You can subscribe to changes to the view model with `subscribe$(fn)`
 ```
-hokan.onChange((oldKeys, newKeys) => {
-  console.log(oldKeys, newKeys)
+vm.subscribe$((val) => {
+  console.log(val)
 })
 ```
 

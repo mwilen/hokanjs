@@ -1,5 +1,7 @@
 (function(){
-    const Hokan = function(keys){
+    const Hokan = function(options){
+
+        options = options || {};
 
         const self = this;
 
@@ -8,11 +10,12 @@
         const ignoredNodes = /(html|body|script|style|meta|head|link)/gi;
         let placeholders = {};
         let prevKeys = {};
-        let tempPrevKeys = {};
-        let listeners = [];
+        let observers = [];
         let iterables = [];
+
+        let element = null;
         
-        this.data = keys || {};
+        this.data = options.data || {};
 
         const state = {
             updateQueue: [],
@@ -20,16 +23,17 @@
             setState: function(obj){
                 const key = Object.keys(obj)[0];
                 this.updateQueue.push(placeholders[key])
-                self[key] = self.data[key]
+                self[key] = self.data[key];
+                self.subscribe$();
             }
         }
         
-        this.$onChange = (cb) => {
+        this.subscribe$ = (cb) => {
             var returnProps = {...this.data};
-            for(var i in listeners){
-                listeners[i](tempPrevKeys, returnProps);
+            for(var i in observers){
+                observers[i](returnProps);
             }
-            typeof cb === 'function' && listeners.push(cb);
+            typeof cb === 'function' && observers.push(cb);
         }
         
         this.$set = (obj) => {
@@ -39,9 +43,15 @@
         Object.freeze(this);
 
         function parseDOM() {
-            if(!document.body)
+
+            if(!element && options.el){
+                element = document.querySelector(options.el);
+            }
+
+            if(!element && !document.body)
                 return;
-            document.body.childNodes.forEach((elem) => {
+
+            (element || document.body).childNodes.forEach((elem) => {
                 if(elem.nodeType === 3 || (elem.tagName && !elem.tagName.match(ignoredNodes))){
                     if(elem.attributes){
                         for(let i = 0; i < elem.attributes.length; i++){
@@ -59,7 +69,7 @@
                                 if(self.data[attr.value]){
                                     elem.value = self.data[attr.value];
                                 }
-                                listeners.push(function(o, n){
+                                observers.push(function(val){
                                     elem.value = self.data[attr.value];
                                 })
                             }
@@ -140,7 +150,6 @@
                         const keys = findPlaceholders(element.clone.innerText);
 
             // eval('for(let ' + variable + ' of '+JSON.stringify(self.data[queueElement.key])+'){ console.log('+variable+') }')
-                        
                         for(let i = 0; i < self.data[queueElement.key].length; i++){
                             let elem = null;
                             const value = self.data[queueElement.key];
@@ -307,7 +316,7 @@
 
         function updateDOM(){
             state.updateQueue.forEach((item) => updateElements(item))
-            updateIterables();
+            // updateIterables();
         }
 
         function placeholderToValue(text, placeholder, value){
@@ -327,21 +336,14 @@
 
             (function timer(){
                 for(let i in self.data){
-                    tempPrevKeys[i] = prevKeys[i];
                     if(self.data[i] !== prevKeys[i]){
-                        prevKeys[i] = self.data[i];
+                        prevKeys[i] = {...self.data[i]};
                         const obj = {}
-                        obj[i] = self.data[i]
+                        obj[i] = prevKeys[i];
                         state.setState(obj);
                         // Update the DOM
                         updateDOM();
                     }
-                }
-                // If a property/value was changed
-                if(state.updateQueue.length){
-                    // Notify possible listeners that a change occurred
-                    self.$onChange();
-                    tempPrevKeys = {};
                 }
                 raf(timer);
             })();
