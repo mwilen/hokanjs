@@ -23,7 +23,6 @@
             setState: function(obj){
                 const key = Object.keys(obj)[0];
                 this.updateQueue.push(placeholders[key])
-                self[key] = self.data[key];
                 self.subscribe$();
             }
         }
@@ -110,7 +109,7 @@
         }
 
         function updateElements(queueElement){
-
+            // console.log(queueElement)
             if(!queueElement)
                 return;
 
@@ -149,7 +148,14 @@
                         const iterable = modelValue.split(' ')[3];
                         const keys = findPlaceholders(element.clone.innerText);
 
-            // eval('for(let ' + variable + ' of '+JSON.stringify(self.data[queueElement.key])+'){ console.log('+variable+') }')
+
+                        eval(`
+                            for(let ${variable} of ${JSON.stringify(self.data[queueElement.key])}){
+                                console.log(${variable});
+                            }
+                        `)
+
+
                         for(let i = 0; i < self.data[queueElement.key].length; i++){
                             let elem = null;
                             const value = self.data[queueElement.key];
@@ -315,12 +321,30 @@
         }
 
         function updateDOM(){
-            state.updateQueue.forEach((item) => updateElements(item))
-            // updateIterables();
+            while(state.updateQueue.length){
+                const item = state.updateQueue[0];
+                updateElements(item);
+            }
         }
 
         function placeholderToValue(text, placeholder, value){
             return text.replace('{{'+ placeholder.replace(valueRegExp, '') + '}}', value)
+        }
+
+        function isEqual(a, b) {
+            if(!a || !b){
+                return false;
+            }
+            if(typeof a === 'string' || typeof b === 'string'){
+                return a === b;
+            }
+            else {
+                return JSON.stringify(a) === JSON.stringify(b);
+            }
+        }
+
+        function clone(a){
+            return JSON.parse(JSON.stringify(a));
         }
 
         (function changeDetector() {
@@ -336,14 +360,16 @@
 
             (function timer(){
                 for(let i in self.data){
-                    if(self.data[i] !== prevKeys[i]){
-                        prevKeys[i] = {...self.data[i]};
+                    if(!isEqual(self.data[i], prevKeys[i])){
+                        prevKeys[i] = typeof self.data[i] !== 'string' ? clone(self.data[i]) : self.data[i];
                         const obj = {}
                         obj[i] = prevKeys[i];
                         state.setState(obj);
-                        // Update the DOM
-                        updateDOM();
                     }
+                }
+                if(state.updateQueue.length){
+                    // Update the DOM
+                    updateDOM();
                 }
                 raf(timer);
             })();
